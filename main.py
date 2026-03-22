@@ -11,11 +11,11 @@ def build_layers_from_args(layer):
     if (layer is None):
         return (
         [
-            Dense(30, 10),
+            Dense(30, 24),
             ReLU(),
-            Dense(10, 24),
+            Dense(24, 10),
             ReLU(),
-            Dense(24, 8),
+            Dense(10, 8),
             ReLU(),
             Dense(8, 2),
             Softmax()
@@ -57,34 +57,29 @@ def build_layers_from_args(layer):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Train MLP — pass a raw dataset to auto-split, or two pre-split files.",
-        usage="python3 main.py data.csv [options]\n"
-              "       python3 main.py train_set.csv validation_set.csv [options]"
+        description="Train MLP — pass a raw dataset to auto-split",
+        usage="python3 main.py data.csv [options]"
     )
-    parser.add_argument("file1", help="Raw dataset (auto-split) or train set")
-    parser.add_argument("file2", nargs="?", default=None, help="Validation set (optional)")
-    parser.add_argument("--split", type=float, default=0.2, help="Validation ratio when auto-splitting (default: 0.2)")
+    parser.add_argument("dataset", help="Raw dataset (auto-split)")
     parser.add_argument("--epochs", type=int, default=70, help="Number of epochs")
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
     parser.add_argument("--learning_rate", type=float, default=0.01, help="Learning rate")
-    parser.add_argument("--layer", type=int, nargs="+")
+    parser.add_argument("--layer", type=int, nargs="+", help = "Number of neurons in each layer")
+    parser.add_argument("--split", type=float, default=0.2, help="Validation split ratio (float, 0 < r < 1)")
     parser.add_argument("--patience", type=int, default=3, help="Early stopping patience")
     parser.add_argument("--adam", action="store_true", help="Activate the Adam Optimizer")
     args = parser.parse_args()
 
-    # Auto-split if only one file is given.
-    if args.file2 is None:
-        print(f"Auto-splitting '{args.file1}' ({int((1 - args.split) * 100)}/{int(args.split * 100)})...")
+    if args.dataset:
+        print(f"Auto-splitting '{args.dataset}' ({int((1 - args.split) * 100)}/{int(args.split * 100)})...")
         try:
-            split_dataset(args.file1, args.split)
+            split_dataset(args.dataset, args.split)
         except (ValueError, FileNotFoundError) as err:
             print(f"Error: {err}")
             sys.exit(1)
-        train_path, val_path = "train_set.csv", "validation_set.csv"
-    else:
-        train_path, val_path = args.file1, args.file2
+        train_path, val_path = "train_set.csv", "validation_set.csv"        
 
-    # Build layers from optional --layer argument.
+    # Build layers from --layer argument
     try:
         model = NeuralNetwork(build_layers_from_args(args.layer))
     except ValueError:
@@ -136,6 +131,7 @@ def main():
     with open("export.json", "w") as f:
         json.dump(export, f, indent=4)
     print("saving model './export.json' to disk...")
+
 
 if __name__ == "__main__":
     main()
