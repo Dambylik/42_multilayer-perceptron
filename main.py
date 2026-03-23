@@ -1,10 +1,12 @@
 from neural_network import *
 from loss_functions import CategoricalCrossEntropy
 from optimizers import Adam, SGD
-from utils import *
+from layers import Dense, ReLU
+from visualize_dataset import print_dataset_info
 import json
 import argparse
 import sys
+from utils import create_training_set, split_dataset
 
 
 def build_layers_from_args(layer):
@@ -72,6 +74,7 @@ def main():
 
     if args.dataset:
         print(f"Auto-splitting '{args.dataset}' ({int((1 - args.split) * 100)}/{int(args.split * 100)})...")
+        print("---" * 50)
         try:
             split_dataset(args.dataset, args.split)
         except (ValueError, FileNotFoundError) as err:
@@ -79,42 +82,38 @@ def main():
             sys.exit(1)
         train_path, val_path = "train_set.csv", "validation_set.csv"        
 
-    # Build layers from --layer argument
     try:
-        model = NeuralNetwork(build_layers_from_args(args.layer))
+        model = NeuralNetMLP(build_layers_from_args(args.layer))
     except ValueError:
         print("A layer must contain at least 1 neuron")
         sys.exit(1)
 
-    # Load train and validation datasets.
-    # Normalization stats are derived from training data and reused on validation to prevent data leakage.
+# =====================
+# Load & Split & Explore the Dataset
+# =====================
+
     try:
-        X, y, train_means, train_stds = create_set_softmax(train_path)
-        X_validation, y_validation, _, _ = create_set_softmax(val_path, train_means, train_stds)
+        X_train, y_train, train_means, stds_train = create_training_set(train_path)
+        print_dataset_info("X_train", X_train, y_train)
+        X_validation, y_validation, _, _ = create_training_set(val_path, train_means, stds_train)
+        print_dataset_info("X_validation", X_validation, y_validation)
     except FileNotFoundError as err:
         print(f"Error: {err}")
         return
 
-    # Print dataset shapes.
-    print(f"x_train shape : {X.shape}")
-    print(f"x_valid shape : {X_validation.shape}")
-
-    # Choose ADAM or SGD.
+    
     if (args.adam):
-        # ADAM / CCE
         model.configure_training(
             loss_criterion=CategoricalCrossEntropy(),
             weight_updater=Adam(build_layers_from_args(args.layer), lr=args.learning_rate)
         )
     else:
-        # SGD / CCE
         model.configure_training(
             loss_criterion=CategoricalCrossEntropy(),
             weight_updater=SGD(lr=args.learning_rate)
         )
 
-    # Train model.
-    model.execute_training(X, y, X_validation, y_validation, epochs=args.epochs, batch_size=args.batch_size, early_stopping_patience=args.patience)
+    model.execute_training(X_train, y_train, X_validation, y_validation, epochs=args.epochs, batch_size=args.batch_size, early_stopping_patience=args.patience)
 
     # Export learned weights/biases and topology to JSON.
     export = []

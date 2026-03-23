@@ -1,19 +1,15 @@
 import numpy as np
 from layers import Dense, Layer
 
+
 class SGD:
     def __init__(self, lr=0.01):
         self.lr = lr
 
     def step(self, parameters, gradients, layer=None):
         for p, g in zip(parameters, gradients):
-            # Simple subtraction: Weight = Weight - (Speed * Error)
-            p -= self.lr * g
-# Notes:
-# RMSProp scales updates using squared gradients.
-# Momentum smooths updates using previous gradients.
-# Adam combines both ideas with bias correction.
-# Adam (Adaptive Moment Estimation)
+            p -= self.lr * g                    # Weight = Weight - (Speed * Error)
+
 
 class Adam:
     def __init__(self, layers, lr=0.001, first_moment_decay=0.9, second_moment_decay=0.999, numerical_stability_constant=1e-8):

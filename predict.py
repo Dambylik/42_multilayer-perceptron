@@ -2,7 +2,7 @@ import json
 import numpy as np
 import argparse
 from layers import Dense, ReLU, Sigmoid, Softmax
-from neural_network import NeuralNetwork
+from neural_network import NeuralNetMLP
 from loss_functions import BinaryCrossEntropy
 from optimizers import SGD
 from utils import create_set_sigmoid
@@ -65,7 +65,7 @@ def run_inference():
     last_dense.biases = np.array([[fused_bias]])
 
     # 5. Build the inference engine
-    inference_model = NeuralNetwork(reconstructed_layers)
+    inference_model = NeuralNetMLP(reconstructed_layers)
     inference_model.configure_training(
         loss_criterion=BinaryCrossEntropy(),
         weight_updater=SGD(lr=0.1)

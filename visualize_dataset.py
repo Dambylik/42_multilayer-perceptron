@@ -2,6 +2,26 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import argparse
 import seaborn as sns
+import numpy as np
+
+
+def print_dataset_info(name, X, y):
+    """Print shape, class counts, first sample, and a class distribution bar chart."""
+    np.set_printoptions(suppress=True, precision=4)
+    print(f"{name} shape : {X.shape}")
+    print(f"  Malignant (M) : {int(np.sum(y[:, 0]))}")
+    print(f"  Benign    (B) : {int(np.sum(y[:, 1]))}")
+    print(f"  First sample  : {X[0]}")
+    print("---" * 50)
+
+    counts = [int(np.sum(y[:, 1])), int(np.sum(y[:, 0]))]
+    fig, ax = plt.subplots(figsize=(5, 4))
+    bars = ax.bar(['Benign (B)', 'Malignant (M)'], counts, color=['steelblue', 'tomato'])
+    ax.bar_label(bars)
+    ax.set_title(f'Class Distribution — {name}')
+    ax.set_ylabel('Number of samples')
+    plt.tight_layout()
+    plt.show()
 
 
 def visualize_data(filename):
