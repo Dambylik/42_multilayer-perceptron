@@ -3,83 +3,132 @@ from layers import Dense, Layer
 
 
 class SGD:
+    """
+    Stochastic Gradient Descent — the simplest optimizer.
+
+    Update rule:
+        W  ←  W  −  lr · dW
+        b  ←  b  −  lr · db
+
+    Every weight moves in the direction that reduces the loss,
+    scaled by the learning rate lr.
+
+    Pros:  simple, low memory, predictable
+    Cons:  same lr for every weight, sensitive to lr choice, slow on flat surfaces
+    """
+
     def __init__(self, lr=0.01):
         self.lr = lr
+        print(f"    [Optimizer] SGD")
+        print(f"                Update rule : W ← W − lr · dW")
+        print(f"                lr          = {lr}")
 
     def step(self, parameters, gradients, layer=None):
         for p, g in zip(parameters, gradients):
-            p -= self.lr * g                    # Weight = Weight - (Speed * Error)
+            p -= self.lr * g   # in-place update
 
 
 class Adam:
-    def __init__(self, layers, lr=0.001, first_moment_decay=0.9, second_moment_decay=0.999, numerical_stability_constant=1e-8):
-        # Hyperparameters
-        self.learning_rate = lr
-        self.first_moment_decay = first_moment_decay   # beta1
-        self.second_moment_decay = second_moment_decay # beta2
-        self.epsilon = numerical_stability_constant
+    """
+    Adaptive Moment Estimation — a smarter optimizer.
 
-        # State tracking (moving averages of gradients)
-        self.first_moments_weights = []  # mW: Mean of gradients
-        self.first_moments_biases = []   # mb
-        self.second_moments_weights = [] # vW: Variance of gradients
-        self.second_moments_biases = []  # vb
-        self.iteration_step = 1          # t
+    Keeps two running averages per parameter:
+        m  = β₁·m + (1−β₁)·dW          ← first moment  (mean of gradients)
+        v  = β₂·v + (1−β₂)·dW²         ← second moment (variance of gradients)
 
-        # Initialize state tensors for each layer in the network
+    Bias-corrected estimates:
+        m̂  = m / (1 − β₁ᵗ)
+        v̂  = v / (1 − β₂ᵗ)
+
+    Update rule:
+        W  ←  W  −  lr · m̂ / (√v̂ + ε)
+
+    Why is Adam better than SGD?
+        - Adapts the learning rate individually per weight
+        - Weights with large gradients get a smaller effective lr (stability)
+        - Weights with small gradients get a larger effective lr (faster progress)
+        - The bias correction prevents the moments from being too small at the start
+    """
+
+    def __init__(self, layers, lr=0.001,
+                 first_moment_decay=0.9,
+                 second_moment_decay=0.999,
+                 numerical_stability_constant=1e-8):
+
+        self.learning_rate         = lr
+        self.first_moment_decay    = first_moment_decay    # β₁
+        self.second_moment_decay   = second_moment_decay   # β₂
+        self.epsilon               = numerical_stability_constant
+        self.iteration_step        = 1                     # t
+
+        # State buffers: one entry per layer (None for non-Dense layers)
+        self.first_moments_weights  = []  # mW
+        self.first_moments_biases   = []  # mb
+        self.second_moments_weights = []  # vW
+        self.second_moments_biases  = []  # vb
+
+        n_dense = 0
         for layer in layers:
             if isinstance(layer, Dense):
-                # We need a history buffer matching the shape of weights and biases
                 rows, cols = layer.weights.shape
                 self.first_moments_weights.append(np.zeros((rows, cols)))
                 self.first_moments_biases.append(np.zeros((1, cols)))
                 self.second_moments_weights.append(np.zeros((rows, cols)))
                 self.second_moments_biases.append(np.zeros((1, cols)))
+                n_dense += 1
             else:
-                # Placeholder for non-parameter layers (like ReLU)
                 self.first_moments_weights.append(None)
                 self.first_moments_biases.append(None)
                 self.second_moments_weights.append(None)
                 self.second_moments_biases.append(None)
 
+        print(f"    [Optimizer] Adam")
+        print(f"                Update rule : W ← W − lr · m̂ / (√v̂ + ε)")
+        print(f"                lr          = {lr}")
+        print(f"                β₁ (mean)   = {first_moment_decay}  "
+              f"β₂ (variance) = {second_moment_decay}  ε = {numerical_stability_constant}")
+        print(f"                Moment buffers allocated for {n_dense} Dense layers")
+
     def step(self, parameter_list, gradient_list, layer):
-        # Adam only updates layers with learnable parameters (Dense)
         if not isinstance(layer, Dense):
-            return
+            return   # only Dense layers have learnable parameters
 
-        layer_idx = layer.layer_id
-        
-        # We loop through the parameters (Weights first, then Biases)
-        for i, (param_tensor, grad_tensor) in enumerate(zip(parameter_list, gradient_list)):
-            
-            if i == 0: # Processing Weights
-                # 1. Update First Moment (Moving Average of Gradients)
-                self.first_moments_weights[layer_idx] = (self.first_moment_decay * self.first_moments_weights[layer_idx] + 
-                                                         (1 - self.first_moment_decay) * grad_tensor)
-                
-                # 2. Update Second Moment (Moving Average of Squared Gradients)
-                self.second_moments_weights[layer_idx] = (self.second_moment_decay * self.second_moments_weights[layer_idx] + 
-                                                          (1 - self.second_moment_decay) * (grad_tensor ** 2))
+        idx = layer.layer_id
 
-                # 3. Bias Correction (Accounts for the moments being 0 at the start)
-                corrected_first_moment = self.first_moments_weights[layer_idx] / (1 - self.first_moment_decay ** self.iteration_step)
-                corrected_second_moment = self.second_moments_weights[layer_idx] / (1 - self.second_moment_decay ** self.iteration_step)
+        for i, (param, grad) in enumerate(zip(parameter_list, gradient_list)):
 
-                # 4. Update the actual Weight values
-                param_tensor -= self.learning_rate * corrected_first_moment / (np.sqrt(corrected_second_moment) + self.epsilon)
+            if i == 0:  # ── Weights ──────────────────────────────────────────
+                # 1. Update first moment (moving average of gradient direction)
+                self.first_moments_weights[idx] = (
+                    self.first_moment_decay * self.first_moments_weights[idx]
+                    + (1 - self.first_moment_decay) * grad)
 
-            else: # Processing Biases
-                self.first_moments_biases[layer_idx] = (self.first_moment_decay * self.first_moments_biases[layer_idx] + 
-                                                        (1 - self.first_moment_decay) * grad_tensor)
-                
-                self.second_moments_biases[layer_idx] = (self.second_moment_decay * self.second_moments_biases[layer_idx] + 
-                                                         (1 - self.second_moment_decay) * (grad_tensor ** 2))
+                # 2. Update second moment (moving average of gradient magnitude²)
+                self.second_moments_weights[idx] = (
+                    self.second_moment_decay * self.second_moments_weights[idx]
+                    + (1 - self.second_moment_decay) * (grad ** 2))
 
-                corrected_first_moment = self.first_moments_biases[layer_idx] / (1 - self.first_moment_decay ** self.iteration_step)
-                corrected_second_moment = self.second_moments_biases[layer_idx] / (1 - self.second_moment_decay ** self.iteration_step)
+                # 3. Bias correction (moments start at 0, correction inflates them early on)
+                m_hat = self.first_moments_weights[idx]  / (1 - self.first_moment_decay  ** self.iteration_step)
+                v_hat = self.second_moments_weights[idx] / (1 - self.second_moment_decay ** self.iteration_step)
 
-                param_tensor -= self.learning_rate * corrected_first_moment / (np.sqrt(corrected_second_moment) + self.epsilon)
+                # 4. Apply update
+                param -= self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon)
 
-        # Increment time step after a full layer update
-        if layer_idx == Layer.counter - 1:
+            else:       # ── Biases ───────────────────────────────────────────
+                self.first_moments_biases[idx] = (
+                    self.first_moment_decay * self.first_moments_biases[idx]
+                    + (1 - self.first_moment_decay) * grad)
+
+                self.second_moments_biases[idx] = (
+                    self.second_moment_decay * self.second_moments_biases[idx]
+                    + (1 - self.second_moment_decay) * (grad ** 2))
+
+                m_hat = self.first_moments_biases[idx]  / (1 - self.first_moment_decay  ** self.iteration_step)
+                v_hat = self.second_moments_biases[idx] / (1 - self.second_moment_decay ** self.iteration_step)
+
+                param -= self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon)
+
+        # Increment global time step once per full network pass
+        if idx == Layer.counter - 1:
             self.iteration_step += 1

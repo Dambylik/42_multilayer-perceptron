@@ -14,14 +14,14 @@ def print_dataset_info(name, X, y):
     print(f"  First sample  : {X[0]}")
     print("---" * 50)
 
-    counts = [int(np.sum(y[:, 1])), int(np.sum(y[:, 0]))]
-    fig, ax = plt.subplots(figsize=(5, 4))
-    bars = ax.bar(['Benign (B)', 'Malignant (M)'], counts, color=['steelblue', 'tomato'])
-    ax.bar_label(bars)
-    ax.set_title(f'Class Distribution — {name}')
-    ax.set_ylabel('Number of samples')
-    plt.tight_layout()
-    plt.show()
+    # counts = [int(np.sum(y[:, 1])), int(np.sum(y[:, 0]))]
+    # fig, ax = plt.subplots(figsize=(5, 4))
+    # bars = ax.bar(['Benign (B)', 'Malignant (M)'], counts, color=['steelblue', 'tomato'])
+    # ax.bar_label(bars)
+    # ax.set_title(f'Class Distribution — {name}')
+    # ax.set_ylabel('Number of samples')
+    # plt.tight_layout()
+    # plt.show()
 
 
 def visualize_data(filename):
@@ -39,7 +39,7 @@ def visualize_data(filename):
     plt.tight_layout()
     plt.savefig("images/class_distribution.png", dpi=150)
     print("Saved images/class_distribution.png")
-    plt.show()
+    
 
     # --- 2. Full Correlation Heatmap ---
     features_df = df.iloc[:, 2:]
@@ -49,7 +49,7 @@ def visualize_data(filename):
     plt.title('Full Feature Correlation Heatmap (30x30)')
     plt.savefig("images/correlation_heatmap.png", dpi=150)
     print("Saved images/correlation_heatmap.png")
-    plt.show()
+    
 
 
 def main():

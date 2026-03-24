@@ -1,135 +1,80 @@
-from neural_network import *
-from loss_functions import CategoricalCrossEntropy
-from optimizers import Adam, SGD
-from layers import Dense, ReLU
-from visualize_dataset import print_dataset_info
-import json
 import argparse
 import sys
-from utils import create_training_set, split_dataset
-
-
-def build_layers_from_args(layer):
-    if (layer is None):
-        return (
-        [
-            Dense(30, 24),
-            ReLU(),
-            Dense(24, 10),
-            ReLU(),
-            Dense(10, 8),
-            ReLU(),
-            Dense(8, 2),
-            Softmax()
-        ])
-    else:
-        for neuron in layer:
-            if (neuron <= 0):
-                raise Exception("A layer must have at least 1 neuron")
-
-        layers_final = []
-        new_dense = Dense(30, layer[0])
-        new_activation = ReLU()
-        last_nb_neurons = layer[0]
-
-        layers_final.append(new_dense)
-        layers_final.append(new_activation)
-
-        if (len(layer) == 1):
-            new_dense = Dense(last_nb_neurons, 2)
-            new_activation = Softmax()
-            layers_final.append(new_dense)
-            layers_final.append(new_activation)
-
-        for i in range(1, len(layer)):
-            # Final layer uses Softmax with 2 output neurons.
-            if (i == len(layer) - 1):
-                new_dense = Dense(last_nb_neurons, 2)
-                new_activation = Softmax()
-            else :
-                new_dense = Dense(last_nb_neurons, layer[i])
-                last_nb_neurons = layer[i]
-                new_activation = ReLU()
-            
-            # Add Dense + activation pair.
-            layers_final.append(new_dense)
-            layers_final.append(new_activation)
-        return (layers_final)
+import json
+from tools.utils import split_dataset, section, subsection
 
 
 def main():
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ARGUMENTS
+    # ══════════════════════════════════════════════════════════════════════════
     parser = argparse.ArgumentParser(
-        description="Train MLP — pass a raw dataset to auto-split",
+        description="Parse args and split dataset",
         usage="python3 main.py data.csv [options]"
     )
-    parser.add_argument("dataset", help="Raw dataset (auto-split)")
-    parser.add_argument("--epochs", type=int, default=70, help="Number of epochs")
-    parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
+    parser.add_argument("dataset",         help="Raw dataset CSV (will be auto-split)")
+    parser.add_argument("--epochs",        type=int,   default=70,   help="Number of epochs")
+    parser.add_argument("--batch_size",    type=int,   default=16,   help="Mini-batch size")
     parser.add_argument("--learning_rate", type=float, default=0.01, help="Learning rate")
-    parser.add_argument("--layer", type=int, nargs="+", help = "Number of neurons in each layer")
-    parser.add_argument("--split", type=float, default=0.2, help="Validation split ratio (float, 0 < r < 1)")
-    parser.add_argument("--patience", type=int, default=3, help="Early stopping patience")
-    parser.add_argument("--adam", action="store_true", help="Activate the Adam Optimizer")
+    parser.add_argument("--layer",         type=int,   nargs="+",    help="Hidden layer widths")
+    parser.add_argument("--split",         type=float, default=0.2,  help="Validation split ratio")
+    parser.add_argument("--patience",      type=int,   default=3,    help="Early stopping patience")
+    parser.add_argument("--adam",          action="store_true",       help="Use Adam instead of SGD")
     args = parser.parse_args()
 
-    if args.dataset:
-        print(f"Auto-splitting '{args.dataset}' ({int((1 - args.split) * 100)}/{int(args.split * 100)})...")
-        print("---" * 50)
-        try:
-            split_dataset(args.dataset, args.split)
-        except (ValueError, FileNotFoundError) as err:
-            print(f"Error: {err}")
-            sys.exit(1)
-        train_path, val_path = "train_set.csv", "validation_set.csv"        
+    optimizer_name = "Adam" if args.adam else "SGD"
+    arch_str       = str(args.layer) if args.layer else "[24, 10, 8]  (default)"
+
+    section("ARGUMENTS")
+    print(f"""
+    All options you passed (or their defaults) are shown below.
+
+        Dataset         : {args.dataset}
+        Epochs          : {args.epochs}
+        Batch size      : {args.batch_size}
+        Learning rate   : {args.learning_rate}
+        Optimizer       : {optimizer_name}
+        Hidden layers   : {arch_str}
+        Val split       : {int(args.split*100)} %
+        Patience        : {args.patience}
+    """)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # DATASET SPLIT
+    # ══════════════════════════════════════════════════════════════════════════
+    section("DATASET SPLIT ")
+    print(f"""
+    The raw dataset is randomly divided into two NON-OVERLAPPING subsets:
+
+    • Training set   → the network SEES these samples and adjusts weights
+    • Validation set → the network NEVER trains on these; used only to
+                       measure how well it generalises to UNSEEN data
+    """)
 
     try:
-        model = NeuralNetMLP(build_layers_from_args(args.layer))
-    except ValueError:
-        print("A layer must contain at least 1 neuron")
+        split_dataset(args.dataset, args.split)
+    except (ValueError, FileNotFoundError) as err:
+        print(f"  Error: {err}")
         sys.exit(1)
 
-# =====================
-# Load & Split & Explore the Dataset
-# =====================
+    # ── Save session.json ─────────────────────────────────────────────────────
+    session = {
+        "dataset":       args.dataset,
+        "train_path":    "generated/train_set.csv",
+        "val_path":      "generated/validation_set.csv",
+        "epochs":        args.epochs,
+        "batch_size":    args.batch_size,
+        "learning_rate": args.learning_rate,
+        "layer":         args.layer,          # None = use default architecture
+        "split":         args.split,
+        "patience":      args.patience,
+        "adam":          args.adam,
+    }
 
-    try:
-        X_train, y_train, train_means, stds_train = create_training_set(train_path)
-        print_dataset_info("X_train", X_train, y_train)
-        X_validation, y_validation, _, _ = create_training_set(val_path, train_means, stds_train)
-        print_dataset_info("X_validation", X_validation, y_validation)
-    except FileNotFoundError as err:
-        print(f"Error: {err}")
-        return
+    with open("generated/session.json", "w") as f:
+        json.dump(session, f, indent=4)
 
-    
-    if (args.adam):
-        model.configure_training(
-            loss_criterion=CategoricalCrossEntropy(),
-            weight_updater=Adam(build_layers_from_args(args.layer), lr=args.learning_rate)
-        )
-    else:
-        model.configure_training(
-            loss_criterion=CategoricalCrossEntropy(),
-            weight_updater=SGD(lr=args.learning_rate)
-        )
-
-    model.execute_training(X_train, y_train, X_validation, y_validation, epochs=args.epochs, batch_size=args.batch_size, early_stopping_patience=args.patience)
-
-    # Export learned weights/biases and topology to JSON.
-    export = []
-    for layer in model.layers:
-        name = type(layer).__name__
-        if name == "Dense":
-            export.append({
-                "type": "Dense",
-                "W": layer.weights.tolist(),
-                "b": layer.biases.tolist()
-            })
-        else:
-            export.append({"type": name})
-    with open("export.json", "w") as f:
-        json.dump(export, f, indent=4)
-    print("saving model './export.json' to disk...")
 
 
 if __name__ == "__main__":

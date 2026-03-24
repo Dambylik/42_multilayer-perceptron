@@ -2,32 +2,67 @@ import numpy as np
 import matplotlib.pyplot as plt
 from loss_functions import BinaryCrossEntropy, CategoricalCrossEntropy
 from layers import Sigmoid, Softmax
-from utils import shuffle_data
-from visualize_graphs import show_combined_graph
+from tools.utils import shuffle_data, section, subsection
+from tools.visualize_graphs import show_combined_graph
 
 
 class NeuralNetMLP:
+    """
+    Multilayer Perceptron — manages the full forward / backward / update cycle.
+
+    Responsibilities:
+        configure_training()  — attach a loss and an optimizer, enable fused gradient
+        forward()             — pass a batch through every layer in order
+        backward()            — pass the error signal back through every layer
+        _update_weights()     — ask the optimizer to update each layer's parameters
+        execute_training()    — full training loop with early stopping
+        fit_predict()         — inference loop + confusion matrix
+        evaluate()            — loss + accuracy on a full dataset (no update)
+    """
+
     def __init__(self, layers):
         self.layers = layers
 
+    # ──────────────────────────────────────────────────────────────────────────
+
     def configure_training(self, loss_criterion, weight_updater):
+        """
+        Attach a loss function and an optimizer to the network.
+        """
         self.criterion = loss_criterion
         self.optimizer = weight_updater
 
         output_layer = self.layers[-1]
         output_layer.is_output_layer = True
 
-        # Fused gradient: skip full Jacobian for Softmax+CCE and Sigmoid+BCE
-        if (isinstance(self.criterion, CategoricalCrossEntropy) and isinstance(output_layer, Softmax)) or \
-           (isinstance(self.criterion, BinaryCrossEntropy) and isinstance(output_layer, Sigmoid)):
+        is_softmax_cce = (isinstance(self.criterion, CategoricalCrossEntropy)
+                          and isinstance(output_layer, Softmax))
+        is_sigmoid_bce = (isinstance(self.criterion, BinaryCrossEntropy)
+                          and isinstance(output_layer, Sigmoid))
+
+        if is_softmax_cce or is_sigmoid_bce:
             output_layer.use_fused_gradient = True
+            fused_msg = "ENABLED — δ = (ŷ-y)/N"
+        else:
+            fused_msg = "disabled"
+
+        print(f"    Output layer     : {type(output_layer).__name__}")
+        print(f"    Fused gradient   : {fused_msg}")
+
+    # ──────────────────────────────────────────────────────────────────────────
 
     def forward(self, X):
+        """Run X through every layer in order and return the final predictions."""
         for layer in self.layers:
             X = layer.forward(X)
         return X
 
     def backward(self, grad):
+        """
+        Propagate the gradient backward through every layer in reverse order.
+        Layers with use_fused_gradient call backward_last_layer() instead of
+        the full backward() to skip the expensive Jacobian computation.
+        """
         for layer in reversed(self.layers):
             if layer.use_fused_gradient:
                 grad = layer.backward_last_layer(grad)
@@ -35,37 +70,68 @@ class NeuralNetMLP:
                 grad = layer.backward(grad)
 
     def _update_weights(self):
+        """Ask the optimizer to step each layer that has learnable parameters."""
         for layer in self.layers:
             self.optimizer.step(layer.get_parameters(), layer.get_gradients(), layer)
 
-    def execute_training(self, X_train, y_train, X_val, y_val, epochs=100, batch_size=32, early_stopping_patience=3):
-        n = X_train.shape[0]
-        train_loss_hist, val_loss_hist = [], []
-        train_acc_hist, val_acc_hist = [], []
+    # ──────────────────────────────────────────────────────────────────────────
 
-        best_val_loss = float("inf")
+    def execute_training(self, X_train, y_train, X_val, y_val,
+                         epochs=100, batch_size=32, early_stopping_patience=3):
+        """
+        Full mini-batch training loop.
+
+        Each epoch:
+          1. Shuffle training data (prevents the network memorising sample order)
+          2. Iterate over mini-batches:
+               a. Forward pass  → predictions ŷ
+               b. Compute loss  L = criterion(ŷ, y)
+               c. Backward pass → gradients dW, db
+               d. Update weights  W ← W − lr·dW
+          3. Evaluate on validation set (no weight update)
+          4. Print metrics
+          5. Early-stopping check: if val_loss has not improved for
+             `patience` consecutive epochs → stop early to avoid overfitting
+        """
+        n         = X_train.shape[0]
+        n_batches = (n + batch_size - 1) // batch_size   # ceil division
+
+        train_loss_hist, val_loss_hist   = [], []
+        train_acc_hist,  val_acc_hist    = [], []
+
+        best_val_loss    = float("inf")
         patience_counter = 0
-        epochs_run = 0
+        epochs_run       = 0
+
+        print(f"\n    Training samples : {n}")
+        print(f"    Batch size       : {batch_size}  →  {n_batches} batches per epoch")
+        print(f"    Max epochs       : {epochs}")
+        print(f"    Early stopping   : patience = {early_stopping_patience} epochs")
+        print(f"\n    {'Epoch':>6}  {'Train Loss':>15}  {'Val Loss':>10}  "
+              f"{'Train Acc':>10}  {'Val Acc':>8}")
+        print(f"    {'─'*66}")
 
         for epoch in range(epochs):
             X_train, y_train = shuffle_data(X_train, y_train)
-            total_loss = 0
-            correct = 0
+            total_loss = 0.0
+            correct    = 0
 
+            # ── Mini-batch loop ───────────────────────────────────────────────
             for start in range(0, n, batch_size):
-                X_batch = X_train[start:start + batch_size]
-                y_batch = y_train[start:start + batch_size]
+                X_batch = X_train[start : start + batch_size]
+                y_batch = y_train[start : start + batch_size]
 
-                preds = self.forward(X_batch)
+                preds       = self.forward(X_batch)
                 total_loss += self.criterion.forward(preds, y_batch) * X_batch.shape[0]
-                correct += np.sum(np.argmax(preds, axis=1) == np.argmax(y_batch, axis=1))
+                correct    += np.sum(np.argmax(preds,   axis=1) ==
+                                     np.argmax(y_batch, axis=1))
 
                 self.backward(self.criterion.backward())
                 self._update_weights()
 
-            val_loss, val_acc = self.evaluate(X_val, y_val)
+            val_loss,  val_acc  = self.evaluate(X_val,   y_val)
             train_loss = total_loss / n
-            train_acc = correct / n
+            train_acc  = correct   / n
 
             train_loss_hist.append(train_loss)
             val_loss_hist.append(val_loss)
@@ -73,22 +139,37 @@ class NeuralNetMLP:
             val_acc_hist.append(val_acc)
             epochs_run += 1
 
-            print(f"Epoch {epoch+1}/{epochs} | Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Acc: {train_acc:.4f} | Val Acc: {val_acc:.4f}")
-
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                patience_counter = 0
-            else:
-                patience_counter += 1
+            print(f"    {epoch+1:>6}/{epochs}  "
+                  f"{train_loss:>11.4f}  {val_loss:>10.4f}  "
+                  f"{train_acc:>10.4f}  {val_acc:>9.4f}")
 
             if patience_counter >= early_stopping_patience:
-                print("Early stopping triggered.")
+                print(f"\n    Early stopping triggered at epoch {epoch+1}.")
+                print(f"    Best validation loss : {best_val_loss:.4f}")
                 break
 
-        show_combined_graph(epochs_run, train_loss_hist, val_loss_hist, train_acc_hist, val_acc_hist)
+        print(f"    {'─'*66}")
+        print(f"    Training complete — {epochs_run} epochs run.")
+
+        show_combined_graph(epochs_run,
+                            train_loss_hist, val_loss_hist,
+                            train_acc_hist,  val_acc_hist)
+
+    # ──────────────────────────────────────────────────────────────────────────
 
     def fit_predict(self, X_val, y_val, batch_size=2, shuffle=False):
-        """Run inference and display a confusion matrix."""
+        """
+        Inference loop: run the model on a dataset and display a confusion matrix.
+
+        Confusion matrix layout:
+            Predicted →     B           M
+            Actual B   [ TN (correct)  FP (false alarm) ]
+            Actual M   [ FN (missed!)  TP (correct)     ]
+
+        Medical importance:
+            FN (missed cancer) is FAR more dangerous than FP (false alarm).
+            → We care most about Recall = TP / (TP + FN).
+        """
         n = X_val.shape[0]
         if shuffle:
             X_val, y_val = shuffle_data(X_val, y_val)
@@ -97,22 +178,36 @@ class NeuralNetMLP:
         all_preds, all_true = [], []
 
         for start in range(0, n, batch_size):
-            X_batch = X_val[start:start + batch_size]
-            y_batch = y_val[start:start + batch_size]
-            y_pred = self.forward(X_batch)
+            X_batch = X_val[start : start + batch_size]
+            y_batch = y_val[start : start + batch_size]
+            y_pred  = self.forward(X_batch)
             total_loss += self.criterion.forward(y_pred, y_batch) * X_batch.shape[0]
             all_preds.extend((y_pred >= 0.5).astype(int).flatten().tolist())
             all_true.extend(y_batch.flatten().tolist())
 
         all_preds = np.array(all_preds)
-        all_true = np.array(all_true)
-        loss = total_loss / n
-        accuracy = np.mean(all_preds == all_true)
-        print(f"Loss: {loss:.4f} - accuracy: {accuracy:.4f}")
+        all_true  = np.array(all_true)
+        loss      = total_loss / n
+        accuracy  = np.mean(all_preds == all_true)
 
+        print(f"\n    Inference results : {n} samples")
+        print(f"    Loss     : {loss:.4f}")
+        print(f"    Accuracy : {accuracy:.4f}  ({accuracy*100:.1f}%)")
+
+        # Build and display confusion matrix
         cm = np.zeros((2, 2), dtype=int)
         for t, p in zip(all_true.astype(int), all_preds.astype(int)):
             cm[t][p] += 1
+
+        tn, fp, fn, tp = cm[0][0], cm[0][1], cm[1][0], cm[1][1]
+
+        print(f"\n    Confusion matrix:")
+        print(f"                    Predicted B   Predicted M")
+        print(f"      Actual B   :  TN = {tn:4d}      FP = {fp:4d}   ← false alarm (benign called malignant)")
+        print(f"      Actual M   :  FN = {fn:4d}      TP = {tp:4d}   ← missed cancer (DANGEROUS)")
+        print(f"\n    Precision : {tp/(tp+fp):.4f}  (of predicted M, how many were actually M)")
+        print(f"    Recall    : {tp/(tp+fn):.4f}  (of actual M, how many did we catch)  ← most critical")
+        print(f"    F1 score  : {2*tp/(2*tp+fp+fn):.4f}")
 
         classes = ["B (benign)", "M (malignant)"]
         _, ax = plt.subplots(figsize=(6, 5))
@@ -125,21 +220,26 @@ class NeuralNetMLP:
         ax.set_xlabel("Predicted")
         ax.set_ylabel("Actual")
         ax.set_title(f"Confusion Matrix  —  loss: {loss:.4f}  acc: {accuracy:.4f}")
-
         labels = [["TN", "FP"], ["FN", "TP"]]
         for i in range(2):
             for j in range(2):
                 color = "white" if cm[i][j] > cm.max() / 2 else "black"
                 ax.text(j, i, f"{labels[i][j]}\n{cm[i][j]}",
-                        ha="center", va="center", color=color, fontsize=13, fontweight="bold")
-
+                        ha="center", va="center",
+                        color=color, fontsize=13, fontweight="bold")
         plt.tight_layout()
         plt.savefig("images/confusion_matrix.png", dpi=150)
-        print("Saved images/confusion_matrix.png")
+        print("\n    Saved images/confusion_matrix.png")
         plt.show()
 
+    # ──────────────────────────────────────────────────────────────────────────
+
     def evaluate(self, X, y):
-        preds = self.forward(X)
-        loss = self.criterion.forward(preds, y)
+        """
+        Compute loss and accuracy on a full dataset without updating weights.
+        Called at the end of every training epoch for the validation set.
+        """
+        preds    = self.forward(X)
+        loss     = self.criterion.forward(preds, y)
         accuracy = np.mean(np.argmax(preds, axis=1) == np.argmax(y, axis=1))
         return loss, accuracy
