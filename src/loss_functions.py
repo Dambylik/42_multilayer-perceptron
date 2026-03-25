@@ -3,22 +3,11 @@ import numpy as np
 
 class BinaryCrossEntropy:
     """
-    Binary Cross-Entropy Loss — used during *inference* with a Sigmoid output.
-
-    Formula:
-        L = -mean( y·log(ŷ) + (1-y)·log(1-ŷ) )
-
-    Intuition:
-        y=1 (Malignant): loss = -log(ŷ)   → huge penalty if ŷ ≈ 0
-        y=0 (Benign):    loss = -log(1-ŷ) → huge penalty if ŷ ≈ 1
-
-    Fused backward (paired with Sigmoid):
-        δ = (ŷ - y) / N      ← simplified from the full chain rule
+    Binary Cross-Entropy Loss
     """
 
     def __init__(self):
         pass
-
 
     def forward(self, prediction, truth):
         self.y_pred = np.clip(prediction, 1e-7, 1 - 1e-7)
@@ -34,24 +23,11 @@ class BinaryCrossEntropy:
 
 class CategoricalCrossEntropy:
     """
-    Categorical Cross-Entropy Loss — used during *training* with a Softmax output.
-
-    Formula:
-        L = -mean( Σ_c  y_c · log(ŷ_c) )
-
-    Intuition:
-        Only the term for the TRUE class contributes (all others are multiplied by 0).
-        So for a Malignant sample: L = -log(ŷ[M])
-        The closer ŷ[M] is to 1.0, the smaller the loss.
-
-    Fused backward (paired with Softmax):
-        δ = (ŷ - y_true) / N      ← simplified from Softmax Jacobian + CCE gradient
-        This is mathematically exact — not an approximation.
+    Categorical Cross-Entropy Loss
     """
 
     def __init__(self):
         pass
-
 
     def forward(self, prediction, truth):
         self.y_pred = np.clip(prediction, 1e-7, 1 - 1e-7)   # avoid log(0)

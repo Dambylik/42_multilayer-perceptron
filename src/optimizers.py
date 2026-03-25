@@ -6,10 +6,8 @@ class SGD:
     """
     Stochastic Gradient Descent.
     """
-
     def __init__(self, lr=0.01):
         self.lr = lr
-
 
     def step(self, parameters, gradients, layer=None):
         for p, g in zip(parameters, gradients):
@@ -20,7 +18,6 @@ class Adam:
     """
     Adaptive Moment Estimation 
     """
-
     def __init__(self, layers, lr=0.001,
                  first_moment_decay=0.9,
                  second_moment_decay=0.999,
@@ -32,7 +29,6 @@ class Adam:
         self.epsilon               = numerical_stability_constant
         self.iteration_step        = 1                     # t
 
-        # State buffers: one entry per layer (None for non-Dense layers)
         self.first_moments_weights  = []  # mW
         self.first_moments_biases   = []  # mb
         self.second_moments_weights = []  # vW
@@ -81,7 +77,7 @@ class Adam:
                 # 4. Apply update
                 param -= self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon)
 
-            else:       # ── Biases ───────────────────────────────────────────
+            else:    # ── Biases ───────────────────────────────────────────
                 self.first_moments_biases[idx] = (
                     self.first_moment_decay * self.first_moments_biases[idx]
                     + (1 - self.first_moment_decay) * grad)

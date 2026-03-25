@@ -1,9 +1,8 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from src.loss_functions import BinaryCrossEntropy, CategoricalCrossEntropy
 from src.layers import Softmax
 from tools.utils import shuffle_data, section, subsection
-from tools.visualize_graphs import show_combined_graph
+from tools.visualize_graphs import show_combined_graph, show_confusion_matrix
 
 
 class NeuralNetMLP:
@@ -91,7 +90,7 @@ class NeuralNetMLP:
         epochs_run       = 0
 
         print(f"\n    Training samples : {n}")
-        print(f"    Batch size       : {batch_size}  →  {n_batches} batches per epoch")
+        print(f"    Batch size       : {batch_size}")
         print(f"    Max epochs       : {epochs}")
         print(f"    Early stopping   : patience = {early_stopping_patience} epochs")
         print(f"\n    {'Epoch':>6}  {'Train Loss':>15}  {'Val Loss':>10}  "
@@ -129,6 +128,12 @@ class NeuralNetMLP:
                   f"{train_loss:>11.4f}  {val_loss:>10.4f}  "
                   f"{train_acc:>10.4f}  {val_acc:>9.4f}")
 
+            if val_loss < best_val_loss:
+                best_val_loss    = val_loss
+                patience_counter = 0
+            else:
+                patience_counter += 1
+
             if patience_counter >= early_stopping_patience:
                 print(f"\n    Early stopping triggered at epoch {epoch+1}.")
                 print(f"    Best validation loss : {best_val_loss:.4f}")
@@ -140,6 +145,13 @@ class NeuralNetMLP:
         show_combined_graph(epochs_run,
                             train_loss_hist, val_loss_hist,
                             train_acc_hist,  val_acc_hist)
+
+        return {
+            "train_loss": train_loss_hist,
+            "val_loss":   val_loss_hist,
+            "train_acc":  train_acc_hist,
+            "val_acc":    val_acc_hist,
+        }
 
 
     def fit_predict(self, X_val, y_val, loss_fn, batch_size=2, shuffle=False):
@@ -174,36 +186,7 @@ class NeuralNetMLP:
         for t, p in zip(all_true.astype(int), all_preds.astype(int)):
             cm[t][p] += 1
 
-        tn, fp, fn, tp = cm[0][0], cm[0][1], cm[1][0], cm[1][1]
-        print(f"\n    Confusion matrix:")
-        print(f"                    Predicted B              Predicted M")
-        print(f"      Actual B   :  TN = {tn:4d}  (correct)   FP = {fp:4d}  ← false alarm")
-        print(f"      Actual M   :  FN = {fn:4d}  ← missed cancer (DANGEROUS)   TP = {tp:4d}  (correct)")
-        print(f"\n    Precision : {tp/(tp+fp):.4f}  (of predicted M, how many were actually M)")
-        print(f"    Recall    : {tp/(tp+fn):.4f}  (of actual M, how many did we catch)  ← most critical")
-        print(f"    F1 score  : {2*tp/(2*tp+fp+fn):.4f}  (mean of Precision and Recall : penalises if either is low)")
-
-        classes = ["B (benign)", "M (malignant)"]
-        _, ax = plt.subplots(figsize=(6, 5))
-        im = ax.imshow(cm, cmap="Blues")
-        plt.colorbar(im, ax=ax)
-        ax.set_xticks([0, 1])
-        ax.set_yticks([0, 1])
-        ax.set_xticklabels(classes)
-        ax.set_yticklabels(classes)
-        ax.set_xlabel("Predicted")
-        ax.set_ylabel("Actual")
-        ax.set_title(f"Confusion Matrix  —  loss: {loss:.4f}  acc: {accuracy:.4f}")
-        labels = [["TN", "FP"], ["FN", "TP"]]
-        for i in range(2):
-            for j in range(2):
-                color = "white" if cm[i][j] > cm.max() / 2 else "black"
-                ax.text(j, i, f"{labels[i][j]}\n{cm[i][j]}",
-                        ha="center", va="center",
-                        color=color, fontsize=13, fontweight="bold")
-        plt.tight_layout()
-        plt.savefig("images/confusion_matrix.png", dpi=150)
-        print("\n    Saved images/confusion_matrix.png")
+        show_confusion_matrix(cm, loss, accuracy)
 
 
     def evaluate(self, X, y):

@@ -51,7 +51,7 @@ At inference time, the 2-output Softmax head is converted to a single logit usin
 │   ├── utils.py                    # Dataset loading, normalization, split, session helpers
 │   ├── visualize_dataset.py        # Class distribution and correlation heatmap plots
 │   ├── visualize_graphs.py         # Training curve plots
-│   └── trace_one_sample.py         # Debug: trace a single sample through the network
+│  
 │
 └── generated/                      # Created at runtime
     ├── session.json                # Training configuration saved by main.py

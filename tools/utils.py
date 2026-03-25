@@ -88,11 +88,10 @@ def build_layers_from_session(session):
         return layers_final
 
     for i in range(1, len(layer)):
-        if i == len(layer) - 1:
-            layers_final += [Dense(last, 2), Softmax()]
-        else:
-            layers_final += [Dense(last, layer[i]), ReLU()]
-            last = layer[i]
+        layers_final += [Dense(last, layer[i]), ReLU()]
+        last = layer[i]
+
+    layers_final += [Dense(last, 2), Softmax()]
 
     return layers_final
 

@@ -43,7 +43,6 @@ def main():
         print(f"  Error: {err}")
         sys.exit(1)
 
-    # ── Save session.json ─────────────────────────────────────────────────────
     session = {
         "dataset":       args.dataset,
         "train_path":    "generated/train_set.csv",
@@ -51,7 +50,7 @@ def main():
         "epochs":        args.epochs,
         "batch_size":    args.batch_size,
         "learning_rate": args.learning_rate,
-        "layer":         args.layer,          # None = use default architecture
+        "layer":         args.layer,
         "split":         args.split,
         "patience":      args.patience,
         "adam":          args.adam,

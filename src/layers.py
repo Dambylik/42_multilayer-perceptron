@@ -6,7 +6,7 @@ class Layer:
     Abstract base class for every layer in the network.
     """
 
-    counter = 0  # global counter — gives each layer a unique ID
+    counter = 0
 
     def __init__(self):
         self.is_output_layer    = False
@@ -44,7 +44,7 @@ class Dense(Layer):
         
 
     def forward(self, input_data):
-        self.stored_input = input_data                           # save for backward
+        self.stored_input = input_data                          # save for backward
         return np.dot(input_data, self.weights) + self.biases   # Z = X·W + b
 
 

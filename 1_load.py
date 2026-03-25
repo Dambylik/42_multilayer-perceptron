@@ -4,7 +4,7 @@ STEP 1 — LOAD & PREPROCESS DATA
 
 import numpy as np
 from tools.utils import load_dataset, section, subsection, load_session
-from tools.visualize_dataset import print_dataset_info, visualize_data, visualize_training_heatmap
+from tools.visualize_dataset import visualize_data, visualize_training_heatmap
 
 
 def main():

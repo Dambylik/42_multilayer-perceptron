@@ -37,6 +37,86 @@ def show_combined_graph(epochs, loss_history, loss_history_validation, accuracy_
         plt.close("all")
 
 
+def show_confusion_matrix(cm, loss, accuracy):
+    """Print confusion matrix stats and save the plot."""
+    import numpy as np
+
+    tn, fp, fn, tp = cm[0][0], cm[0][1], cm[1][0], cm[1][1]
+
+    print(f"\n    Confusion matrix:")
+    print(f"                    Predicted B              Predicted M")
+    print(f"      Actual B   :  TN = {tn:4d}  (correct)   FP = {fp:4d}  ← false alarm")
+    print(f"      Actual M   :  FN = {fn:4d}  ← missed cancer (DANGEROUS)   TP = {tp:4d}  (correct)")
+
+    precision = tp / (tp + fp)          if (tp + fp) > 0 else 0.0
+    recall    = tp / (tp + fn)          if (tp + fn) > 0 else 0.0
+    f1        = 2*tp / (2*tp + fp + fn) if (2*tp + fp + fn) > 0 else 0.0
+    print(f"\n    Precision : {precision:.4f}  (of predicted M, how many were actually M)")
+    print(f"    Recall    : {recall:.4f}  (of actual M, how many did we catch)  ← most critical")
+    print(f"    F1 score  : {f1:.4f}  (mean of Precision and Recall : penalises if either is low)")
+
+    classes = ["B (benign)", "M (malignant)"]
+    _, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(cm, cmap="Blues")
+    plt.colorbar(im, ax=ax)
+    ax.set_xticks([0, 1])
+    ax.set_yticks([0, 1])
+    ax.set_xticklabels(classes)
+    ax.set_yticklabels(classes)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+    ax.set_title(f"Confusion Matrix  —  loss: {loss:.4f}  acc: {accuracy:.4f}")
+    labels = [["TN", "FP"], ["FN", "TP"]]
+    for i in range(2):
+        for j in range(2):
+            color = "white" if cm[i][j] > cm.max() / 2 else "black"
+            ax.text(j, i, f"{labels[i][j]}\n{cm[i][j]}",
+                    ha="center", va="center",
+                    color=color, fontsize=13, fontweight="bold")
+    plt.tight_layout()
+    plt.savefig("images/confusion_matrix.png", dpi=150)
+    print("\n    Saved images/confusion_matrix.png")
+
+
+def show_multi_run_graph(all_runs):
+    """
+    Overlay loss and accuracy curves from multiple training runs on the same graph.
+    Each run must be a dict with keys: label, train_loss, val_loss, train_acc, val_acc.
+    """
+    fig, (ax_loss, ax_acc) = plt.subplots(1, 2, figsize=(14, 5))
+    fig.suptitle("Multi-run comparison", fontsize=14)
+
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+    for i, run in enumerate(all_runs):
+        color  = colors[i % len(colors)]
+        label  = run["label"]
+        epochs = range(len(run["train_loss"]))
+
+        ax_loss.plot(epochs, run["train_loss"], color=color, label=f"{label} — train")
+        ax_loss.plot(epochs, run["val_loss"],   color=color, label=f"{label} — val", linestyle="--")
+
+        ax_acc.plot(epochs, run["train_acc"], color=color, label=f"{label} — train")
+        ax_acc.plot(epochs, run["val_acc"],   color=color, label=f"{label} — val", linestyle="--")
+
+    ax_loss.set_xlabel("Epochs")
+    ax_loss.set_ylabel("Loss")
+    ax_loss.set_title("Loss — all runs")
+    ax_loss.legend(fontsize=7)
+    ax_loss.grid(alpha=0.3)
+
+    ax_acc.set_xlabel("Epochs")
+    ax_acc.set_ylabel("Accuracy")
+    ax_acc.set_title("Accuracy — all runs")
+    ax_acc.legend(fontsize=7)
+    ax_acc.grid(alpha=0.3)
+
+    plt.tight_layout()
+    out = "images/multi_run_curves.png"
+    plt.savefig(out, dpi=150)
+    print(f"    Saved {out}")
+
+
 def show_graph_loss(epochs, loss_history, loss_history_validation):
     try:
         epochs_graph = range(0, epochs)

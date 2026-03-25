@@ -1,9 +1,5 @@
 """
 STEP 2 — MODEL ARCHITECTURE & TRAINING CONFIGURATION
-
-Display-only step: builds the layer stack in memory, prints the architecture
-and every training hyper-parameter, then discards the objects.
-The real model is built and trained in step4_train.py.
 """
 
 import os
@@ -61,12 +57,11 @@ def main():
     print(f"  {'─' * 72}")
     print(f"  {'Total trainable parameters':>50} : {total_params}")
 
-    # ── 2. training configuration ─────────────────────────────────────────────
     subsection("Training configuration")
     print(f"  Loss function : CategoricalCrossEntropy")
     print(f"  Optimizer     : {optimizer_name}  (lr = {lr})")
     print(f"  Epochs        : {epochs}")
-    print(f"  Batch size    : {batch_size}  ({n_batches_str} batches per epoch)")
+    print(f"  Batch size    : {batch_size} ")
     print(f"  Early stop    : patience = {patience} epochs")
 
 

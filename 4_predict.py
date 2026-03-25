@@ -1,8 +1,12 @@
 """
 STEP 4 — PREDICT
+
+Usage:
+    python3 4_predict.py                          # uses generated/export.json
+    python3 4_predict.py generated/export_run2.json
 """
 
-import argparse
+import sys
 from src.loss_functions import BinaryCrossEntropy
 from tools.utils import (section, reconstruct_model_from_json,
                          fuse_softmax_to_sigmoid, build_inference_model,
@@ -10,19 +14,16 @@ from tools.utils import (section, reconstruct_model_from_json,
 
 
 def run_inference():
-    cli_parser = argparse.ArgumentParser(description="MLP Prediction Utility")
-    cli_parser.add_argument("data_file",  nargs="?", default="generated/validation_set.csv")
-    cli_parser.add_argument("model_file", nargs="?", default="generated/export.json")
-    args = cli_parser.parse_args()
+    model_path = sys.argv[1] if len(sys.argv) > 1 else "generated/export.json"
 
     try:
-        layers = reconstruct_model_from_json(args.model_file)
+        layers = reconstruct_model_from_json(model_path)
     except Exception as error:
         print(f"  Error loading model: {error}")
         return
 
     try:
-        val_features, val_labels, _, _ = load_dataset(args.data_file, one_hot=False)
+        val_features, val_labels, _, _ = load_dataset("generated/validation_set.csv", one_hot=False)
     except Exception as error:
         print(f"  Error loading data: {error}")
         return
