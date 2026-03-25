@@ -110,7 +110,7 @@ print("""
             W ~ Uniform(-limit, +limit)
             b = zeros
 
-  This is called "LeCun uniform" initialization.
+  This is called "He uniform" initialization.
   It keeps activations in a reasonable range at the start.
 """)
 

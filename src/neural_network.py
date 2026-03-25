@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from loss_functions import BinaryCrossEntropy, CategoricalCrossEntropy
-from layers import Sigmoid, Softmax
+from src.loss_functions import BinaryCrossEntropy, CategoricalCrossEntropy
+from src.layers import Softmax
 from tools.utils import shuffle_data, section, subsection
 from tools.visualize_graphs import show_combined_graph
 
@@ -14,7 +14,7 @@ class NeuralNetMLP:
         configure_training()  — attach a loss and an optimizer, enable fused gradient
         forward()             — pass a batch through every layer in order
         backward()            — pass the error signal back through every layer
-        _update_weights()     — ask the optimizer to update each layer's parameters
+        update_weights()     — ask the optimizer to update each layer's parameters
         execute_training()    — full training loop with early stopping
         fit_predict()         — inference loop + confusion matrix
         evaluate()            — loss + accuracy on a full dataset (no update)
@@ -23,7 +23,6 @@ class NeuralNetMLP:
     def __init__(self, layers):
         self.layers = layers
 
-    # ──────────────────────────────────────────────────────────────────────────
 
     def configure_training(self, loss_criterion, weight_updater):
         """
@@ -35,21 +34,11 @@ class NeuralNetMLP:
         output_layer = self.layers[-1]
         output_layer.is_output_layer = True
 
-        is_softmax_cce = (isinstance(self.criterion, CategoricalCrossEntropy)
-                          and isinstance(output_layer, Softmax))
-        is_sigmoid_bce = (isinstance(self.criterion, BinaryCrossEntropy)
-                          and isinstance(output_layer, Sigmoid))
+        output_layer.use_fused_gradient = (
+            isinstance(self.criterion, CategoricalCrossEntropy)
+            and isinstance(output_layer, Softmax)
+        )
 
-        if is_softmax_cce or is_sigmoid_bce:
-            output_layer.use_fused_gradient = True
-            fused_msg = "ENABLED — δ = (ŷ-y)/N"
-        else:
-            fused_msg = "disabled"
-
-        print(f"    Output layer     : {type(output_layer).__name__}")
-        print(f"    Fused gradient   : {fused_msg}")
-
-    # ──────────────────────────────────────────────────────────────────────────
 
     def forward(self, X):
         """Run X through every layer in order and return the final predictions."""
@@ -57,24 +46,23 @@ class NeuralNetMLP:
             X = layer.forward(X)
         return X
 
+
     def backward(self, grad):
         """
         Propagate the gradient backward through every layer in reverse order.
-        Layers with use_fused_gradient call backward_last_layer() instead of
-        the full backward() to skip the expensive Jacobian computation.
         """
         for layer in reversed(self.layers):
             if layer.use_fused_gradient:
                 grad = layer.backward_last_layer(grad)
             else:
                 grad = layer.backward(grad)
-
-    def _update_weights(self):
+                
+                
+    def update_weights(self):
         """Ask the optimizer to step each layer that has learnable parameters."""
         for layer in self.layers:
             self.optimizer.step(layer.get_parameters(), layer.get_gradients(), layer)
 
-    # ──────────────────────────────────────────────────────────────────────────
 
     def execute_training(self, X_train, y_train, X_val, y_val,
                          epochs=100, batch_size=32, early_stopping_patience=3):
@@ -90,11 +78,10 @@ class NeuralNetMLP:
                d. Update weights  W ← W − lr·dW
           3. Evaluate on validation set (no weight update)
           4. Print metrics
-          5. Early-stopping check: if val_loss has not improved for
-             `patience` consecutive epochs → stop early to avoid overfitting
+          5. Early-stopping check: if val_loss has not improved → stop early to avoid overfitting
         """
         n         = X_train.shape[0]
-        n_batches = (n + batch_size - 1) // batch_size   # ceil division
+        n_batches = (n + batch_size - 1) // batch_size
 
         train_loss_hist, val_loss_hist   = [], []
         train_acc_hist,  val_acc_hist    = [], []
@@ -116,7 +103,6 @@ class NeuralNetMLP:
             total_loss = 0.0
             correct    = 0
 
-            # ── Mini-batch loop ───────────────────────────────────────────────
             for start in range(0, n, batch_size):
                 X_batch = X_train[start : start + batch_size]
                 y_batch = y_train[start : start + batch_size]
@@ -127,7 +113,7 @@ class NeuralNetMLP:
                                      np.argmax(y_batch, axis=1))
 
                 self.backward(self.criterion.backward())
-                self._update_weights()
+                self.update_weights()
 
             val_loss,  val_acc  = self.evaluate(X_val,   y_val)
             train_loss = total_loss / n
@@ -155,20 +141,10 @@ class NeuralNetMLP:
                             train_loss_hist, val_loss_hist,
                             train_acc_hist,  val_acc_hist)
 
-    # ──────────────────────────────────────────────────────────────────────────
 
-    def fit_predict(self, X_val, y_val, batch_size=2, shuffle=False):
+    def fit_predict(self, X_val, y_val, loss_fn, batch_size=2, shuffle=False):
         """
         Inference loop: run the model on a dataset and display a confusion matrix.
-
-        Confusion matrix layout:
-            Predicted →     B           M
-            Actual B   [ TN (correct)  FP (false alarm) ]
-            Actual M   [ FN (missed!)  TP (correct)     ]
-
-        Medical importance:
-            FN (missed cancer) is FAR more dangerous than FP (false alarm).
-            → We care most about Recall = TP / (TP + FN).
         """
         n = X_val.shape[0]
         if shuffle:
@@ -180,8 +156,8 @@ class NeuralNetMLP:
         for start in range(0, n, batch_size):
             X_batch = X_val[start : start + batch_size]
             y_batch = y_val[start : start + batch_size]
-            y_pred  = self.forward(X_batch)
-            total_loss += self.criterion.forward(y_pred, y_batch) * X_batch.shape[0]
+            y_pred  = 1 / (1 + np.exp(-self.forward(X_batch)))
+            total_loss += loss_fn.forward(y_pred, y_batch) * X_batch.shape[0]
             all_preds.extend((y_pred >= 0.5).astype(int).flatten().tolist())
             all_true.extend(y_batch.flatten().tolist())
 
@@ -194,20 +170,18 @@ class NeuralNetMLP:
         print(f"    Loss     : {loss:.4f}")
         print(f"    Accuracy : {accuracy:.4f}  ({accuracy*100:.1f}%)")
 
-        # Build and display confusion matrix
         cm = np.zeros((2, 2), dtype=int)
         for t, p in zip(all_true.astype(int), all_preds.astype(int)):
             cm[t][p] += 1
 
         tn, fp, fn, tp = cm[0][0], cm[0][1], cm[1][0], cm[1][1]
-
         print(f"\n    Confusion matrix:")
-        print(f"                    Predicted B   Predicted M")
-        print(f"      Actual B   :  TN = {tn:4d}      FP = {fp:4d}   ← false alarm (benign called malignant)")
-        print(f"      Actual M   :  FN = {fn:4d}      TP = {tp:4d}   ← missed cancer (DANGEROUS)")
+        print(f"                    Predicted B              Predicted M")
+        print(f"      Actual B   :  TN = {tn:4d}  (correct)   FP = {fp:4d}  ← false alarm")
+        print(f"      Actual M   :  FN = {fn:4d}  ← missed cancer (DANGEROUS)   TP = {tp:4d}  (correct)")
         print(f"\n    Precision : {tp/(tp+fp):.4f}  (of predicted M, how many were actually M)")
         print(f"    Recall    : {tp/(tp+fn):.4f}  (of actual M, how many did we catch)  ← most critical")
-        print(f"    F1 score  : {2*tp/(2*tp+fp+fn):.4f}")
+        print(f"    F1 score  : {2*tp/(2*tp+fp+fn):.4f}  (mean of Precision and Recall : penalises if either is low)")
 
         classes = ["B (benign)", "M (malignant)"]
         _, ax = plt.subplots(figsize=(6, 5))
@@ -230,9 +204,7 @@ class NeuralNetMLP:
         plt.tight_layout()
         plt.savefig("images/confusion_matrix.png", dpi=150)
         print("\n    Saved images/confusion_matrix.png")
-        plt.show()
 
-    # ──────────────────────────────────────────────────────────────────────────
 
     def evaluate(self, X, y):
         """

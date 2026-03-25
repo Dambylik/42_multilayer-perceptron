@@ -1,53 +1,24 @@
 import numpy as np
-from layers import Dense, Layer
+from src.layers import Dense, Layer
 
 
 class SGD:
     """
-    Stochastic Gradient Descent — the simplest optimizer.
-
-    Update rule:
-        W  ←  W  −  lr · dW
-        b  ←  b  −  lr · db
-
-    Every weight moves in the direction that reduces the loss,
-    scaled by the learning rate lr.
-
-    Pros:  simple, low memory, predictable
-    Cons:  same lr for every weight, sensitive to lr choice, slow on flat surfaces
+    Stochastic Gradient Descent.
     """
 
     def __init__(self, lr=0.01):
         self.lr = lr
-        print(f"    [Optimizer] SGD")
-        print(f"                Update rule : W ← W − lr · dW")
-        print(f"                lr          = {lr}")
+
 
     def step(self, parameters, gradients, layer=None):
         for p, g in zip(parameters, gradients):
-            p -= self.lr * g   # in-place update
+            p -= self.lr * g
 
 
 class Adam:
     """
-    Adaptive Moment Estimation — a smarter optimizer.
-
-    Keeps two running averages per parameter:
-        m  = β₁·m + (1−β₁)·dW          ← first moment  (mean of gradients)
-        v  = β₂·v + (1−β₂)·dW²         ← second moment (variance of gradients)
-
-    Bias-corrected estimates:
-        m̂  = m / (1 − β₁ᵗ)
-        v̂  = v / (1 − β₂ᵗ)
-
-    Update rule:
-        W  ←  W  −  lr · m̂ / (√v̂ + ε)
-
-    Why is Adam better than SGD?
-        - Adapts the learning rate individually per weight
-        - Weights with large gradients get a smaller effective lr (stability)
-        - Weights with small gradients get a larger effective lr (faster progress)
-        - The bias correction prevents the moments from being too small at the start
+    Adaptive Moment Estimation 
     """
 
     def __init__(self, layers, lr=0.001,
@@ -82,16 +53,11 @@ class Adam:
                 self.second_moments_weights.append(None)
                 self.second_moments_biases.append(None)
 
-        print(f"    [Optimizer] Adam")
-        print(f"                Update rule : W ← W − lr · m̂ / (√v̂ + ε)")
-        print(f"                lr          = {lr}")
-        print(f"                β₁ (mean)   = {first_moment_decay}  "
-              f"β₂ (variance) = {second_moment_decay}  ε = {numerical_stability_constant}")
-        print(f"                Moment buffers allocated for {n_dense} Dense layers")
+
 
     def step(self, parameter_list, gradient_list, layer):
         if not isinstance(layer, Dense):
-            return   # only Dense layers have learnable parameters
+            return
 
         idx = layer.layer_id
 

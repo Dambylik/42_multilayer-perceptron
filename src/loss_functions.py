@@ -17,12 +17,11 @@ class BinaryCrossEntropy:
     """
 
     def __init__(self):
-        print(f"    [Loss] BinaryCrossEntropy")
-        print(f"           L = -mean( y·log(ŷ) + (1-y)·log(1-ŷ) )")
-        print(f"           Used with: Sigmoid output (inference)")
+        pass
+
 
     def forward(self, prediction, truth):
-        self.y_pred = np.clip(prediction, 1e-7, 1 - 1e-7)   # avoid log(0)
+        self.y_pred = np.clip(prediction, 1e-7, 1 - 1e-7)
         self.y_true = truth
         term_1 = truth * np.log(self.y_pred)
         term_2 = (1 - truth) * np.log(1 - self.y_pred)
@@ -51,9 +50,8 @@ class CategoricalCrossEntropy:
     """
 
     def __init__(self):
-        print(f"    [Loss] CategoricalCrossEntropy")
-        print(f"           L = -mean( Σ_c  y_c · log(ŷ_c) )")
-        print(f"           Used with: Softmax output (training)")
+        pass
+
 
     def forward(self, prediction, truth):
         self.y_pred = np.clip(prediction, 1e-7, 1 - 1e-7)   # avoid log(0)

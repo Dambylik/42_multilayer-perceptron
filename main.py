@@ -5,10 +5,6 @@ from tools.utils import split_dataset, section, subsection
 
 
 def main():
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # ARGUMENTS
-    # ══════════════════════════════════════════════════════════════════════════
     parser = argparse.ArgumentParser(
         description="Parse args and split dataset",
         usage="python3 main.py data.csv [options]"
@@ -20,7 +16,7 @@ def main():
     parser.add_argument("--layer",         type=int,   nargs="+",    help="Hidden layer widths")
     parser.add_argument("--split",         type=float, default=0.2,  help="Validation split ratio")
     parser.add_argument("--patience",      type=int,   default=3,    help="Early stopping patience")
-    parser.add_argument("--adam",          action="store_true",       help="Use Adam instead of SGD")
+    parser.add_argument("--adam",          action="store_true",      help="Use Adam instead of SGD")
     args = parser.parse_args()
 
     optimizer_name = "Adam" if args.adam else "SGD"
@@ -40,18 +36,7 @@ def main():
         Patience        : {args.patience}
     """)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # DATASET SPLIT
-    # ══════════════════════════════════════════════════════════════════════════
     section("DATASET SPLIT ")
-    print(f"""
-    The raw dataset is randomly divided into two NON-OVERLAPPING subsets:
-
-    • Training set   → the network SEES these samples and adjusts weights
-    • Validation set → the network NEVER trains on these; used only to
-                       measure how well it generalises to UNSEEN data
-    """)
-
     try:
         split_dataset(args.dataset, args.split)
     except (ValueError, FileNotFoundError) as err:

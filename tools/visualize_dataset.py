@@ -26,8 +26,6 @@ def print_dataset_info(name, X, y):
 
 def visualize_data(filename):
     df = pd.read_csv(filename, header=None)
-
-    # --- 1. Target Distribution ---
     counts = df[1].value_counts()
     plt.figure(figsize=(6, 4))
     plt.bar(counts.index, counts.values, color=["steelblue", "tomato"])
@@ -40,8 +38,6 @@ def visualize_data(filename):
     plt.savefig("images/class_distribution.png", dpi=150)
     print("Saved images/class_distribution.png")
     
-
-    # --- 2. Full Correlation Heatmap ---
     features_df = df.iloc[:, 2:]
     plt.figure(figsize=(15, 12))
     correlation_matrix = features_df.corr()
@@ -50,6 +46,19 @@ def visualize_data(filename):
     plt.savefig("images/correlation_heatmap.png", dpi=150)
     print("Saved images/correlation_heatmap.png")
     
+
+
+def visualize_training_heatmap(X_train, y_train):
+    """Plot and save a correlation heatmap of the normalized training features."""
+    df = pd.DataFrame(X_train, columns=[f"f{i}" for i in range(X_train.shape[1])])
+    plt.figure(figsize=(15, 12))
+    correlation_matrix = df.corr()
+    sns.heatmap(correlation_matrix, annot=False, cmap='coolwarm', center=0)
+    plt.title('Training Set Feature Correlation Heatmap (normalized)')
+    plt.tight_layout()
+    plt.savefig("images/training_heatmap.png", dpi=150)
+    print("Saved images/training_heatmap.png")
+    plt.close()
 
 
 def main():
