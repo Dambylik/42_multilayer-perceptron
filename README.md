@@ -6,6 +6,22 @@ No neural network library is used — only NumPy for linear algebra and Matplotl
 
 ---
 
+## Dataset
+
+569 samples, 30 features, 2 classes. The dataset is moderately imbalanced: 252 benign vs 146 malignant in the training split.
+
+![Class distribution](images/class_distribution.png)
+
+Many features are strongly correlated (radius, perimeter, area), as seen in the full feature correlation heatmap:
+
+![Correlation heatmap](images/correlation_heatmap.png)
+
+After z-score normalization, the training set feature correlation structure is preserved:
+
+![Training set heatmap](images/training_heatmap.png)
+
+---
+
 ## Architecture
 
 ```
@@ -27,7 +43,7 @@ Dense(8  → 2)  + Softmax   ← training  (CCE loss)
 
 The default architecture uses **3 hidden layers**. It is fully configurable via `--layer`.
 
-At inference time, the 2-output Softmax head is converted to a single logit using the identity `Softmax([a,b])[0] = Sigmoid(a−b)`, so no Sigmoid layer is needed in the source.
+At inference time, the 2-output Softmax head is converted to a single logit using the identity `Softmax([a,b])[0] = Sigmoid(a−b)`, so no retraining is needed for inference.
 
 ---
 
@@ -50,8 +66,7 @@ At inference time, the 2-output Softmax head is converted to a single logit usin
 ├── tools/
 │   ├── utils.py                    # Dataset loading, normalization, split, session helpers
 │   ├── visualize_dataset.py        # Class distribution and correlation heatmap plots
-│   ├── visualize_graphs.py         # Training curve plots
-│  
+│   └── visualize_graphs.py         # Training curve plots
 │
 └── generated/                      # Created at runtime
     ├── session.json                # Training configuration saved by main.py
@@ -75,17 +90,16 @@ pip install -r requirements.txt
 
 ## Usage
 
-The workflow is split into sequential steps. Run `main.py` first to configure the session, then run each step in order.
+Run `main.py` first to configure the session, then run each numbered step in order.
 
 ### Step 0 — Configure
 
 ```bash
 python3 main.py data.csv
+python3 main.py data.csv --epochs 100 --batch_size 32 --learning_rate 0.005 --layer 24 16 8 --adam
 ```
 
 Parses arguments, splits `data.csv` into train/validation sets, and saves `generated/session.json`.
-
-**Available options:**
 
 | Argument | Default | Description |
 |----------|---------|-------------|
@@ -107,14 +121,6 @@ python3 1_load.py
 
 Loads train/validation CSVs, applies z-score normalization, saves `norm_stats.json`, and plots dataset visualizations.
 
-**Class distribution** — how many M vs B samples:
-
-![Class distribution](images/class_distribution.png)
-
-**Correlation heatmap** — which features are correlated across the training set:
-
-![Training heatmap](images/training_heatmap.png)
-
 ---
 
 ### Step 2 — Review Configuration
@@ -133,25 +139,35 @@ Displays the layer architecture and training hyperparameters that will be used. 
 python3 3_train.py
 ```
 
-Builds the network, runs mini-batch training with backpropagation, and saves weights to `generated/export.json`.
+Builds the network, runs mini-batch training with backpropagation, and saves weights to `generated/export.json`. Each run's history is appended to `generated/histories.json`.
 
-**Training curves** — loss and accuracy over epochs:
+Loss and accuracy converge quickly — training typically stops early via patience:
 
 ![Training curves](images/training_curves.png)
+
+Run `5_compare.py` (if available) to overlay curves from multiple runs and compare hyperparameter choices:
+
+![Multi-run comparison](images/multi_run_curves.png)
 
 ---
 
 ### Step 4 — Predict
 
 ```bash
-python3 4_predict.py generated/validation_set.csv generated/export.json
+python3 4_predict.py
+python3 4_predict.py generated/export_run2.json   # use a specific run
 ```
 
 Loads `export.json`, fuses the Softmax head into a single sigmoid logit, runs inference on the validation set, and displays a confusion matrix.
 
-**Confusion matrix:**
+**Result — loss: 0.3591 | accuracy: 94.15%**
 
 ![Confusion matrix](images/confusion_matrix.png)
+
+- **TN 104** — correctly predicted Benign
+- **TP 57** — correctly predicted Malignant
+- **FP 1** — predicted Malignant, actually Benign (false alarm)
+- **FN 9** — predicted Benign, actually Malignant (missed cancer — the critical error to minimize)
 
 ---
 
@@ -159,19 +175,19 @@ Loads `export.json`, fuses the Softmax head into a single sigmoid logit, runs in
 
 ### Forward Propagation
 
-Input data flows through each layer:
+Input flows through each layer sequentially:
 
 ```
 output = activation(input @ W + b)
 ```
 
-Each Dense layer stores its input for the backward pass.
+Each Dense layer caches its input for use during the backward pass.
 
 ### Backpropagation
 
-Gradients are computed using the chain rule, flowing from the loss backward through each layer:
+Gradients flow from the loss backward through each layer via the chain rule:
 
-- **Output layer (fused gradient):** for Softmax+CCE, the delta simplifies to `δ = (ŷ − y) / batch_size`
+- **Output layer (fused gradient):** for Softmax+CCE the delta simplifies to `δ = (ŷ − y) / batch_size`
 - **Hidden layers:** `δ_prev = δ @ W.T`, then `dW = input.T @ δ`, `db = sum(δ, axis=0)`
 
 ### Weight Initialization
@@ -183,29 +199,16 @@ limit = sqrt(6 / n_in)
 W ~ Uniform(−limit, +limit)
 ```
 
-### Weight Update
+### Optimizers
 
-SGD:
+**SGD:**
 ```
 W = W − lr * dW
 b = b − lr * db
 ```
 
-With **Adam**, gradients are scaled by their running mean and variance (first and second moments) with bias correction.
+**Adam:** gradients are scaled by their running first and second moments with bias correction, giving adaptive per-parameter learning rates.
 
 ### Early Stopping
 
-Training stops when validation loss does not improve for `--patience` consecutive epochs, preventing overfitting.
-
----
-
-## Results
-
-| Metric | Value |
-|--------|-------|
-| Val Loss | ~0.17 |
-| Val Accuracy | ~94.8% |
-
-The off-diagonal cells of the confusion matrix show misclassifications:
-- **FP** (predicted M, actually B) — false alarm
-- **FN** (predicted B, actually M) — missed cancer, the more critical error to minimize
+Training halts when validation loss does not improve for `--patience` consecutive epochs, preventing overfitting.

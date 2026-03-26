@@ -5,6 +5,7 @@ import pandas as pd
 from src.layers import Dense, ReLU, Softmax
 
 
+
 def load_session():
     """Load generated/session.json and return the dict, or None on error."""
     try:
@@ -59,7 +60,7 @@ def fuse_softmax_to_sigmoid(layers):
 
 
 def build_inference_model(layers):
-    """Wrap layers in a NeuralNetMLP ready for inference (no optimizer needed)."""
+    """Wrap layers in a NeuralNetMLP ready for inference."""
     from src.neural_network import NeuralNetMLP
     return NeuralNetMLP(layers)
 
