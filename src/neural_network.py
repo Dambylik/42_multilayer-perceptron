@@ -154,9 +154,12 @@ class NeuralNetMLP:
         }
 
 
-    def fit_predict(self, X_val, y_val, loss_fn, batch_size=2, shuffle=False):
+    def fit_predict(self, X_val, y_val, bce_loss, batch_size=2, shuffle=False):
         """
         Inference loop: run the model on a dataset and display a confusion matrix.
+
+        The fused model outputs a single raw logit per sample.
+        We apply Sigmoid to turn it into a probability, then BCE to measure the loss.
         """
         n = X_val.shape[0]
         if shuffle:
@@ -168,9 +171,13 @@ class NeuralNetMLP:
         for start in range(0, n, batch_size):
             X_batch = X_val[start : start + batch_size]
             y_batch = y_val[start : start + batch_size]
-            y_pred  = 1 / (1 + np.exp(-self.forward(X_batch)))
-            total_loss += loss_fn.forward(y_pred, y_batch) * X_batch.shape[0]
-            all_preds.extend((y_pred >= 0.5).astype(int).flatten().tolist())
+
+            logits        = self.forward(X_batch)                        # raw output, shape (batch, 1)
+            sigmoid_probs = 1 / (1 + np.exp(-logits))                    # Sigmoid → probability in (0, 1)
+            bce           = bce_loss.forward(sigmoid_probs, y_batch)     # BCE loss for this batch
+            total_loss   += bce * X_batch.shape[0]
+
+            all_preds.extend((sigmoid_probs >= 0.5).astype(int).flatten().tolist())
             all_true.extend(y_batch.flatten().tolist())
 
         all_preds = np.array(all_preds)
