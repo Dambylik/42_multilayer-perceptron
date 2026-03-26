@@ -16,10 +16,6 @@ Many features are strongly correlated (radius, perimeter, area), as seen in the 
 
 ![Correlation heatmap](images/correlation_heatmap.png)
 
-After z-score normalization, the training set feature correlation structure is preserved:
-
-![Training set heatmap](images/training_heatmap.png)
-
 ---
 
 ## Architecture
